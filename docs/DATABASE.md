@@ -68,6 +68,54 @@ DATABASE_URL=（SQLite 填本機路徑，PostgreSQL 填連線字串）
 
 > 公告和 SEO 關鍵字統一存在 settings 表，用 key 區分。
 
+### orders（訂單主表）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | SERIAL PK | 主鍵 |
+| order_number | TEXT UNIQUE | 訂單編號，格式：TS + YYYYMMDD + 4碼序號 |
+| customer_name | TEXT | 顧客姓名（必填） |
+| customer_email | TEXT | 顧客 Email（必填） |
+| customer_phone | TEXT | 顧客電話（可空） |
+| total_amount | INTEGER | 訂單總金額（元） |
+| status | TEXT | pending/paid/cancelled/refunded，預設 pending |
+| payment_method | TEXT | ECPay 付款方式（Credit/ATM/CVS） |
+| ecpay_trade_no | TEXT | 綠界交易編號 |
+| notes | TEXT | 管理員備註 |
+| created_at | TIMESTAMP | 建立時間 |
+| updated_at | TIMESTAMP | 更新時間 |
+
+### order_items（訂單商品明細）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | SERIAL PK | 主鍵 |
+| order_id | INTEGER FK | 關聯 orders.id |
+| product_id | INTEGER | 商品 ID（可空，商品刪除後 FK 斷掉） |
+| product_name | TEXT | 商品名稱快照（下單時存入） |
+| product_image | TEXT | 商品圖片快照 |
+| price | INTEGER | 單價快照（下單時售價） |
+| quantity | INTEGER | 購買數量 |
+| subtotal | INTEGER | 小計（price × quantity） |
+
+> product_name、price 使用快照設計，避免商品修改或刪除後訂單資料遺失。
+
+### transactions（金流交易記錄）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | SERIAL PK | 主鍵 |
+| order_id | INTEGER FK | 關聯 orders.id |
+| ecpay_trade_no | TEXT | 綠界交易編號 |
+| payment_type | TEXT | 付款方式 |
+| amount | INTEGER | 交易金額 |
+| rtn_code | TEXT | 1=成功，其他=失敗 |
+| rtn_msg | TEXT | 交易訊息 |
+| raw_data | TEXT | ECPay Webhook 完整原始資料（JSON 字串） |
+| created_at | TIMESTAMP | 建立時間 |
+
+> 每次 ECPay Webhook 回呼都新增一筆，不修改舊記錄，保留完整金流歷史。
+
 ## 資料表關聯
 
 ```
@@ -75,6 +123,8 @@ admins 無外鍵關聯
 products 獨立
 carousel 獨立
 settings 獨立
+orders ← order_items（一對多）
+orders ← transactions（一對多）
 ```
 
 ## 索引說明

@@ -18,9 +18,9 @@
 |------|------|
 | 前端 | React + Tailwind CSS |
 | 後端 | Node.js + Express |
-| 資料庫 | SQLite（開發）/ PostgreSQL（正式） |
-| 圖片儲存 | Cloudinary |
-| 部署 | （填入） |
+| 資料庫 | PostgreSQL（Neon，與 temple-website 獨立） |
+| 圖片儲存 | Cloudinary（資料夾：toy-store/） |
+| 部署 | Render（後端 Web Service + 前端 Static Site） |
 
 ## 目錄結構
 
@@ -96,7 +96,7 @@ CLOUDINARY_API_SECRET=
 | 環境 | 允許 Origin |
 |------|------|
 | 開發 | http://localhost:5173 |
-| 正式 | https://（填入） |
+| 正式 | https://（前端 Static Site 網址，deploy 後填入） |
 
 ## 注意事項
 

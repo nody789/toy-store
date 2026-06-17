@@ -4,7 +4,7 @@
 
 ```
 開發環境：http://localhost:3001/api
-正式環境：https://（填入）/api
+正式環境：https://toy-store-xb0m.onrender.com/api
 ```
 
 > API 版本：目前為 v1，路徑統一加上 `/v1/`（例如 `/api/v1/products`）
@@ -138,6 +138,17 @@ Token 過期處理：
 | Method | 路徑 | 說明 | 權限 |
 |--------|------|------|------|
 | POST | /upload | 上傳圖片至 Cloudinary，回傳圖片 URL | 登入 |
+
+### 訂單
+
+| Method | 路徑 | 說明 | 權限 |
+|--------|------|------|------|
+| GET | /orders | 後台：取得訂單列表（?status= 篩選） | 登入 |
+| GET | /orders/:id | 後台：取得訂單詳情（含商品明細、金流記錄） | 登入 |
+| PUT | /orders/:id | 後台：更新訂單狀態或備註 | 登入 |
+| POST | /orders | 前台：建立訂單（購物車結帳） | 公開 |
+
+訂單狀態值：`pending`（待付款）、`paid`（已付款）、`cancelled`（已取消）、`refunded`（已退款）
 
 ## 回應狀態碼
 
