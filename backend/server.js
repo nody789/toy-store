@@ -63,6 +63,7 @@ app.use('/api/products', require('./routes/products'));
 app.use('/api/carousel', require('./routes/carousel'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/upload', require('./routes/upload'));
+app.use('/api/orders', require('./routes/orders'));
 
 // ── 正式環境：服務前端靜態檔案 ────────────────────────────
 const frontendDist = path.join(__dirname, '../frontend/dist');

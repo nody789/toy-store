@@ -67,6 +67,56 @@ async function initDb() {
       )
     `);
 
+    // ── 訂單主表 ──────────────────────────────────────────────
+    // status: pending=待付款, paid=已付款, cancelled=已取消, refunded=已退款
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id SERIAL PRIMARY KEY,
+        order_number TEXT UNIQUE NOT NULL,
+        customer_name TEXT NOT NULL,
+        customer_email TEXT NOT NULL,
+        customer_phone TEXT,
+        total_amount INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        payment_method TEXT,
+        ecpay_trade_no TEXT,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // ── 訂單明細 ──────────────────────────────────────────────
+    // 商品資訊用快照（product_name/price），避免商品被刪後遺失紀錄
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS order_items (
+        id SERIAL PRIMARY KEY,
+        order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
+        product_id INTEGER,
+        product_name TEXT NOT NULL,
+        product_image TEXT,
+        price INTEGER NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 1,
+        subtotal INTEGER NOT NULL
+      )
+    `);
+
+    // ── 金流交易紀錄 ──────────────────────────────────────────
+    // 每次 ECPay Webhook 回呼都新增一筆，保留完整原始資料
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id SERIAL PRIMARY KEY,
+        order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
+        ecpay_trade_no TEXT,
+        payment_type TEXT,
+        amount INTEGER,
+        rtn_code TEXT,
+        rtn_msg TEXT,
+        raw_data TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
     // ── 預設管理員帳號 ────────────────────────────────────────
     // 預設帳密：admin / admin123（上線前請務必修改）
     const hashed = await bcrypt.hash('admin123', 10);

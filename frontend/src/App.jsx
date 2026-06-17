@@ -4,6 +4,7 @@ import Dashboard from './pages/admin/Dashboard'
 import ProductsManager from './pages/admin/ProductsManager'
 import CarouselManager from './pages/admin/CarouselManager'
 import SiteSettings from './pages/admin/SiteSettings'
+import OrdersManager from './pages/admin/OrdersManager'
 import AdminLayout from './components/admin/AdminLayout'
 import ProtectedRoute from './components/admin/ProtectedRoute'
 
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="products" element={<ProductsManager />} />
         <Route path="carousel" element={<CarouselManager />} />
         <Route path="settings" element={<SiteSettings />} />
+        <Route path="orders" element={<OrdersManager />} />
       </Route>
 
       {/* 預設導向後台 */}

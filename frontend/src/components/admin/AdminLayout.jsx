@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 const navItems = [
   { to: '/admin', label: '總覽', end: true },
   { to: '/admin/products', label: '商品管理' },
+  { to: '/admin/orders', label: '訂單管理' },
   { to: '/admin/carousel', label: '輪播圖' },
   { to: '/admin/settings', label: '網站設定' },
 ]
