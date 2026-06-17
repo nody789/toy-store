@@ -1,33 +1,50 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../../api'
 import AdminToast from '../../components/admin/AdminToast'
 
 const emptyForm = { name: '', description: '', price: '', image_url: '', active: 1, sort_order: 0 }
 
+const fetchProducts = () => api.get('/products/all').then(r => r.data)
+
 export default function ProductsManager() {
-  const [products, setProducts] = useState([])
+  const queryClient = useQueryClient()
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState({ message: '', type: 'success' })
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type })
-    setTimeout(() => setToast({ message: '', type: 'success' }), 3000)
+    setTimeout(() => setToast({ message: '' }), 3000)
   }
 
-  const fetchProducts = async () => {
-    try {
-      const res = await api.get('/products/all')
-      setProducts(res.data)
-    } catch {
-      showToast('載入失敗', 'error')
-    }
-  }
+  // 商品列表：切換頁面再切回來會直接顯示快取，30 秒內不重新請求
+  const { data: products = [], isLoading } = useQuery({
+    queryKey: ['products-all'],
+    queryFn: fetchProducts,
+  })
 
-  useEffect(() => { fetchProducts() }, [])
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['products-all'] })
+
+  const createMutation = useMutation({
+    mutationFn: (data) => api.post('/products', data),
+    onSuccess: () => { showToast('新增成功'); setForm(emptyForm); setShowForm(false); invalidate() },
+    onError: (err) => showToast(err.response?.data?.message || '新增失敗', 'error'),
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/products/${id}`, data),
+    onSuccess: () => { showToast('更新成功'); setForm(emptyForm); setEditingId(null); setShowForm(false); invalidate() },
+    onError: (err) => showToast(err.response?.data?.message || '更新失敗', 'error'),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/products/${id}`),
+    onSuccess: () => { showToast('刪除成功'); invalidate() },
+    onError: () => showToast('刪除失敗', 'error'),
+  })
 
   const handleImageUpload = async (e) => {
     const file = e.target.files[0]
@@ -47,51 +64,25 @@ export default function ProductsManager() {
   }
 
   const handleEdit = (product) => {
-    setForm({
-      name: product.name,
-      description: product.description || '',
-      price: product.price,
-      image_url: product.image_url || '',
-      active: product.active,
-      sort_order: product.sort_order,
-    })
+    setForm({ name: product.name, description: product.description || '', price: product.price, image_url: product.image_url || '', active: product.active, sort_order: product.sort_order })
     setEditingId(product.id)
     setShowForm(true)
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault()
     if (!form.name.trim()) return showToast('商品名稱為必填', 'error')
-    setLoading(true)
-    try {
-      if (editingId) {
-        await api.put(`/products/${editingId}`, { ...form, price: Number(form.price) })
-        showToast('更新成功')
-      } else {
-        await api.post('/products', { ...form, price: Number(form.price) })
-        showToast('新增成功')
-      }
-      setForm(emptyForm)
-      setEditingId(null)
-      setShowForm(false)
-      fetchProducts()
-    } catch (err) {
-      showToast(err.response?.data?.message || '操作失敗', 'error')
-    } finally {
-      setLoading(false)
-    }
+    const data = { ...form, price: Number(form.price) }
+    if (editingId) updateMutation.mutate({ id: editingId, data })
+    else createMutation.mutate(data)
   }
 
-  const handleDelete = async (id) => {
+  const handleDelete = (id) => {
     if (!confirm('確定要刪除這個商品嗎？')) return
-    try {
-      await api.delete(`/products/${id}`)
-      showToast('刪除成功')
-      fetchProducts()
-    } catch {
-      showToast('刪除失敗', 'error')
-    }
+    deleteMutation.mutate(id)
   }
+
+  const isSaving = createMutation.isPending || updateMutation.isPending
 
   return (
     <div>
@@ -107,7 +98,6 @@ export default function ProductsManager() {
         </button>
       </div>
 
-      {/* 新增/編輯表單 */}
       {showForm && (
         <div className="bg-white rounded shadow-sm p-6 mb-6">
           <h3 className="font-medium text-gray-700 mb-4">{editingId ? '編輯商品' : '新增商品'}</h3>
@@ -115,37 +105,20 @@ export default function ProductsManager() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-gray-600 mb-1">商品名稱 *</label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  required
-                />
+                <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" required />
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">售價（元）*</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={form.price}
-                  onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
-                  className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  required
-                />
+                <input type="number" min="0" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
+                  className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" required />
               </div>
             </div>
-
             <div>
               <label className="block text-sm text-gray-600 mb-1">商品描述</label>
-              <textarea
-                value={form.description}
-                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                rows={3}
-                className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
+              <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                rows={3} className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
             </div>
-
             <div>
               <label className="block text-sm text-gray-600 mb-1">商品圖片</label>
               <div className="flex items-center gap-3">
@@ -153,49 +126,29 @@ export default function ProductsManager() {
                   {uploading ? '上傳中...' : '選擇圖片'}
                   <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
                 </label>
-                {form.image_url && (
-                  <img src={form.image_url} alt="預覽" className="w-16 h-16 object-cover rounded border" />
-                )}
+                {form.image_url && <img src={form.image_url} alt="預覽" className="w-16 h-16 object-cover rounded border" />}
               </div>
             </div>
-
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm text-gray-600 mb-1">排序</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={form.sort_order}
-                  onChange={e => setForm(f => ({ ...f, sort_order: Number(e.target.value) }))}
-                  className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                />
+                <input type="number" min="0" value={form.sort_order} onChange={e => setForm(f => ({ ...f, sort_order: Number(e.target.value) }))}
+                  className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
               </div>
               <div className="flex items-end pb-2">
                 <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600">
-                  <input
-                    type="checkbox"
-                    checked={form.active === 1}
-                    onChange={e => setForm(f => ({ ...f, active: e.target.checked ? 1 : 0 }))}
-                    className="w-4 h-4"
-                  />
+                  <input type="checkbox" checked={form.active === 1} onChange={e => setForm(f => ({ ...f, active: e.target.checked ? 1 : 0 }))} className="w-4 h-4" />
                   上架顯示
                 </label>
               </div>
             </div>
-
             <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={loading || uploading}
-                className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-4 py-2 rounded text-sm transition-colors"
-              >
-                {loading ? '儲存中...' : '儲存'}
+              <button type="submit" disabled={isSaving || uploading}
+                className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-4 py-2 rounded text-sm transition-colors">
+                {isSaving ? '儲存中...' : '儲存'}
               </button>
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-600 px-4 py-2 rounded text-sm transition-colors"
-              >
+              <button type="button" onClick={() => setShowForm(false)}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-600 px-4 py-2 rounded text-sm transition-colors">
                 取消
               </button>
             </div>
@@ -203,9 +156,12 @@ export default function ProductsManager() {
         </div>
       )}
 
-      {/* 商品列表 */}
       <div className="bg-white rounded shadow-sm overflow-hidden">
-        {products.length === 0 ? (
+        {isLoading ? (
+          <div className="space-y-3 p-4">
+            {[1, 2, 3].map(i => <div key={i} className="h-14 bg-gray-100 rounded animate-pulse" />)}
+          </div>
+        ) : products.length === 0 ? (
           <div className="text-center text-gray-400 py-12">目前沒有商品，請點擊「新增商品」</div>
         ) : (
           <table className="w-full text-sm">
@@ -223,17 +179,13 @@ export default function ProductsManager() {
               {products.map((product) => (
                 <tr key={product.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
-                    {product.image_url ? (
-                      <img src={product.image_url} alt={product.name} className="w-12 h-12 object-cover rounded" />
-                    ) : (
-                      <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center text-gray-300 text-xs">無圖</div>
-                    )}
+                    {product.image_url
+                      ? <img src={product.image_url} alt={product.name} className="w-12 h-12 object-cover rounded" />
+                      : <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center text-gray-300 text-xs">無圖</div>}
                   </td>
                   <td className="px-4 py-3">
                     <div className="font-medium text-gray-800">{product.name}</div>
-                    {product.description && (
-                      <div className="text-xs text-gray-400 mt-0.5 line-clamp-1">{product.description}</div>
-                    )}
+                    {product.description && <div className="text-xs text-gray-400 mt-0.5 line-clamp-1">{product.description}</div>}
                   </td>
                   <td className="px-4 py-3 text-gray-700">NT$ {product.price.toLocaleString()}</td>
                   <td className="px-4 py-3 text-gray-500">{product.sort_order}</td>
@@ -244,18 +196,8 @@ export default function ProductsManager() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => handleEdit(product)}
-                        className="text-blue-500 hover:text-blue-700 text-xs"
-                      >
-                        編輯
-                      </button>
-                      <button
-                        onClick={() => handleDelete(product.id)}
-                        className="text-red-400 hover:text-red-600 text-xs"
-                      >
-                        刪除
-                      </button>
+                      <button onClick={() => handleEdit(product)} className="text-blue-500 hover:text-blue-700 text-xs">編輯</button>
+                      <button onClick={() => handleDelete(product.id)} className="text-red-400 hover:text-red-600 text-xs">刪除</button>
                     </div>
                   </td>
                 </tr>
